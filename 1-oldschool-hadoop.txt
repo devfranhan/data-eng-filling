@@ -1,0 +1,129 @@
+This project consists in creating three VMs (master, worker1, worker2) and run some hadoop MapReduce jobs for data manipulation. In an old school way!!! 😎
+
+-- 1. I'm on a MacBook, so I'm  gonna start choosing my hypervisor and installing UTM (it could be VirtualBox, VMWare Fusion Player, or any other hypervisor)
+#####
+-- 2. Download iso file for Linux https://ubuntu.com/download/server
+#####
+-- 3. Create 3 VM's, called hadoop-master, hadoop-worker1, hadoop-worker2
+VM configs (for each one):
+    - CPU: 2vCPUs
+    - RAM: 4GB
+    - Disk: 20GB
+    - Network: NAT
+    (Install SSH)
+    After linux kernel installation is complete, remove the iso from your hypervisor virtual machines and reboot linux.
+#####
+-- 4. On terminal (for each VM):
+    Get the IP address:
+        ip a | grep inet
+    (In my case)
+        192.168.64.6 <- hadoop-master
+        192.168.64.8 <- hadoop-worker1
+        192.168.64.7 <- hadoop-worker2
+
+    Open the following file:
+        sudo nano /etc/hosts
+
+    Add 3 lines with the 3 IPs and hostnames of each VM:
+    192.168.64.6 hadoop-master
+    192.168.64.8 hadoop-worker1
+    192.168.64.7 hadoop-worker2
+
+    Save the file!
+    Verify if your changes are done:
+    cat /etc/hosts
+
+    Test connection with the other VMs (from master, but recommended to test in every VM):
+    ping hadoop-worker1
+    ping hadoop-worker2
+#####
+-- 5. Keygen on hadoop-master (the VMs need to trust themselves without password):
+    ssh-keygen -y rsa -b 4096
+
+    Copy public key to workers:
+    ssh-copy-id hadoop-worker1
+    ssh-copy-id hadoop-worker2
+
+    Try to access without password:
+    ssh hadoop-worker1
+    ssh hadoop-worker2
+#####
+--6. Java! ☕️ (all in each VM)
+    Download and install java:
+    sudo apt update && sudo apt install openjdk-11-jdk -y
+
+    (Verify)
+    java --version
+
+    Check java path
+    readlink -f $(which java)
+
+#####
+-- 7. Hadoop! (all in each VM)
+    Download Hadoop:
+        sudo wget https://downloads.apache.org/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz
+
+    Extract and move to /opt/hadoop
+    sudo tar -xvzf hadoop-3.3.6.tar.gz -C /opt/
+    sudo mv /opt/hadoop-3.3.6 /opt/hadoop
+
+    Define env variables:
+    export HADOOP_HOME=/opt/hadoop
+    export PATH=$HADOOP_HOME/bin:$PATH
+    export PATH=$HADOOP_HOME/sbin:$PATH
+
+    apply:
+    source ~/.bashrc
+
+    Verify Java path:
+    which java
+
+    Access the hadoop-env.sh file 
+    sudo nano /opt/hadoop/etc/hadoop/hadoop-env.sh
+    and add this line:
+    export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+    export HADOOP_SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+    export HADOOP_USER_NAME=gabriel #### Your username
+
+    apply:
+    source /opt/hadoop/etc/hadoop/hadoop-env.sh
+
+    On master node, start Hadoop!
+        start-dfs.sh
+        start-yarn.sh
+
+    When you execute this...
+        jps
+    ...must return something like this:
+        5802 NameNode
+        4101 ResourceManager
+        8901 SecondaryNameNode
+        6782 DataNode
+        4503 NodeManager
+
+    Install net-tools:
+        sudo apt install net-tools
+
+    List all hadoop-master open ports:
+        netstat -tulnp | grep LISTEN
+
+    Now you can validate in your browser that Hadoop is online, in your browser.
+    Namenode:
+        http://{hadoop-master-ip}:9870
+    YARN:
+        http://{hadoop-master-ip}:8088
+    
+    In my case:
+    http://192.168.64.6:9870/
+    http://192.168.64.6:8088/
+
+    
+
+
+
+
+    
+    
+
+
+
