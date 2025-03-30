@@ -1,17 +1,24 @@
 
+# conclusion: by adjusting the schema, the amount of data per spark stream trigger and splitting the flow, spark can still deliver near realtime data.
+
 # input data: "discogs_20250201_releases.csv" 24.8 GB from Kaggle
 # https://www.kaggle.com/datasets/ofurkancoban/discogs-datasets-january-2025?select=discogs_20250201_releases.csv
 
 from pyspark.sql import SparkSession, functions as F
 from pyspark.sql.types import StructType, StructField, StringType
+from utils import *
 
 # for job observability, check Spark UI:
 # http://localhost:4050/jobs/
 spark = SparkSession.builder \
     .appName("Load 25gb") \
+    .config("spark.driver.memory", "8g") \
+    .config("spark.executor.memory", "8g") \
+    .config("spark.executor.cores", "2") \
     .config("spark.driver.bindAddress", "localhost") \
     .config("spark.ui.port", "4050") \
     .getOrCreate()
+
 
 # the wrong way (java.lang.OutOfMemoryError: Java heap space):
 def wrong_way():
@@ -20,7 +27,7 @@ def wrong_way():
         .option("header", "true") \
         .option("inferSchema", "true") \
         .csv("/Users/franhan/alfred/data/*.csv")
-    df = df.limit(10)
+    # df = df.limit(10)
 
     log(yellow("writing data..."))
 
@@ -32,6 +39,7 @@ def wrong_way():
     return
 
 
+# streaming way!!!
 def right_way():
     log(green("right way started"))
 
@@ -94,11 +102,10 @@ def right_way():
         .option("header", "true") \
         .option("inferSchema", "true") \
         .option("maxFilesPerTrigger", "1") \
-        .option("maxBytesPerTrigger", "250MB") \
+        .option("maxBytesPerTrigger", "500MB") \
         .load("/Users/franhan/alfred/data/")
 
-    df = df.limit(100000)
-    df = df.repartition(5)
+    df = df.repartition(20)
 
     log(yellow("writing data..."))
 
@@ -106,50 +113,39 @@ def right_way():
         .format("parquet") \
         .option("path", "/Users/franhan/alfred/data-eng-filling/output") \
         .option("checkpointLocation", "/Users/franhan/alfred/data-eng-filling/checkpoint") \
+        .option("compression", "snappy") \
         .outputMode("append") \
+        .trigger(processingTime="60 seconds") \
         .start() \
         .awaitTermination()
 
     return
 
-def main():
-    #wrong_way()
-    right_way()
-    log(green('success! :)'))
+
+# check the source number of rows:
+def checker():
+    status = ""
+    log(yellow("starting checker..."))
+    df_source = spark.read.option("header", "true").csv("/Users/franhan/alfred/data/*.csv")
+
+    df_destination = spark.read.parquet("/Users/franhan/alfred/data-eng-filling/output/*.parquet")
+    if df_source.count() == df_destination.count():
+        log(green("data streamed successfully"))
+    else:
+        log(yellow("source " + str(df_source.count()) + ", destination " + str(df_destination.count())))
+
     return
 
-# some color for better learning
-def green(s):
-    return '\033[1;32m%s\033[m' % s
 
+def main():
+    #wrong_way()
+    #right_way()
+    checker()
 
-def yellow(s):
-    return '\033[1;33m%s\033[m' % s
-
-
-def red(s):
-    return '\033[1;31m%s\033[m' % s
-
-
-def log(*m):
-    print(" ".join(map(str, m)))
+    log(green('success! :)'))
+    return
 
 
 if __name__ == "__main__":
     main()
-
-# the wrong way
-
-# dfr = data for research
-# dfr = df.filter(F.col("videos_video_title") != "NULL").limit(500)
-# dfr.cache()
-# print(dfr.columns)
-
-# for column in dfr.columns:
-#     dfr.select(column).filter(F.col(column) != "NULL").show(1, truncate=False)
-
-# dfr.select("videos_video_title", "tracklist_track_duration").show(50, truncate=False)
-
-# df.write.mode("overwrite").parquet("/output")
-
 
