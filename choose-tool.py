@@ -1,5 +1,6 @@
 import os
 import psutil
+from utils import *
 
 def get_file_size_gb(file_path):
     size_bytes = os.path.getsize(file_path)
@@ -12,8 +13,8 @@ def suggest_framework(file_path):
     file_size_gb = get_file_size_gb(file_path)
     ram_available = get_available_ram_gb()
 
-    print(f"File size: {file_size_gb:.2f} GB")
-    print(f"Available RAM: {ram_available:.2f} GB")
+    log(f"File size: {file_size_gb:.2f} GB")
+    log(f"Available RAM: {ram_available:.2f} GB")
 
     if file_size_gb < 1 and ram_available > 4:
         return "Tip: Use Pandas"
@@ -26,4 +27,4 @@ def suggest_framework(file_path):
 
 
 path_file = "/Users/franhan/alfred/data/discogs_20250201_releases.csv"
-print(suggest_framework(path_file))
+log(green(suggest_framework(path_file)))

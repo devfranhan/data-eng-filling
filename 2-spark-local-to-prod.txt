@@ -1,0 +1,98 @@
+
+Details and attention points when developing production environments on Local Spark.
+
+1... Tell spark to use all your computer cores:
+.master("local[*]")
+
+2... Get some sample data:
+head -n 1000000 originalfile.csv > samplefile.csv
+
+3... Check execution plan:
+.explain() at the end of the df action
+
+4... Spark UI! Check tasks, memory, shuffles etc.
+SparkSession.builder.config("spark.ui.port", "8080")
+
+5... df.repartition(8).write.parquet("outputfolder/")
+This will prepare your code for future shuffles and writes, in multiple nodes.
+
+6... Test in docker!
+
+docker-compose.yml:
+
+version: "3"
+services:
+  spark-master:
+    image: bitnami/spark:latest
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - /Users/franhan/alfred/data-eng-filling:/opt/shared-data
+
+  spark-worker-1:
+    image: bitnami/spark:latest
+    container_name: spark-worker-1
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_CORES=2
+    volumes:
+      - /Users/franhan/alfred/data-eng-filling:/opt/shared-data
+
+  spark-worker-2:
+    image: bitnami/spark:latest
+    container_name: spark-worker-2
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_CORES=2
+    volumes:
+      - /Users/franhan/alfred/data-eng-filling:/opt/shared-data
+
+
+
+spark-defaults.conf:
+
+spark.driver.memory              1g
+spark.executor.memory            1g
+spark.executor.cores             1
+# spark.eventLog.enabled           true
+# spark.eventLog.dir               file:///tmp/spark-events
+# spark.history.fs.logDirectory    file:///tmp/spark-events
+
+
+Test!
+
+docker exec -it spark-master bash
+spark-shell --master spark://spark-master:7077
+
+scala test in spark shell:
+val data = sc.parallelize(1 to 10000)
+data.filter(_ % 2 == 0).count()
+
+get the ip of master container:
+docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' spark-master
+
+in your python code:
+.master("spark://spark-master:7077") \
+
+
+docker exec -it spark-master bash
+spark-shell --master spark://spark-master:7077
+spark-submit --master spark://spark-master:7077 /opt/shared-data/2.1.0-spark-local-to-prod.py
+
+
